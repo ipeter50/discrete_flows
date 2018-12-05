@@ -559,7 +559,7 @@ class RNNDecoder(nn.Module):
         pre_msg = torch.cat([receivers, senders], dim=-1)
 
         all_msgs = Variable(torch.zeros(pre_msg.size(0), pre_msg.size(1),
-                                        self.msg_out_shape))
+                                        self.msg_out_shape)).cuda()
         if inputs.is_cuda:
             all_msgs = all_msgs.cuda()
 
@@ -573,16 +573,24 @@ class RNNDecoder(nn.Module):
         # Run separate MLP for every edge type
         # NOTE: To exlude one edge type, simply offset range by 1
         for i in range(start_idx, len(self.msg_fc2)):
-            msg = F.tanh(self.msg_fc1[i](pre_msg))
-            msg = F.dropout(msg, p=self.dropout_prob)
-            msg = F.tanh(self.msg_fc2[i](msg))
-            msg = msg * rel_type[:, :, i:i + 1]
-            all_msgs += msg / norm
 
-        agg_msgs = all_msgs.transpose(-2, -1).matmul(rel_rec).transpose(-2,
-                                                                        -1)
+            msg = F.tanh(self.msg_fc1[i](pre_msg))
+
+            msg = F.dropout(msg, p=self.dropout_prob)
+
+            msg = F.tanh(self.msg_fc2[i](msg))
+           
+
+            msg = msg * rel_type[:, :, i:i + 1]
+
+
+
+            all_msgs += msg.cuda() / norm
+
+        agg_msgs = all_msgs.transpose(-2, -1).matmul(rel_rec).transpose(-2,-1)
         agg_msgs = agg_msgs.contiguous() / inputs.size(2)  # Average
 
+        
         # GRU-style gated aggregation
         r = F.sigmoid(self.input_r(inputs) + self.hidden_r(agg_msgs))
         i = F.sigmoid(self.input_i(inputs) + self.hidden_i(agg_msgs))
